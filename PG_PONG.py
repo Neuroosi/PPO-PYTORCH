@@ -12,7 +12,7 @@ import skimage
 import POLICY_NET
 import VALUE_ESTIMATOR
 import Transition
-import copy
+from wandb import wandb
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 ##Hyperparameters
@@ -85,12 +85,10 @@ def predict_VALUE(agent, state):
 if __name__ == "__main__":
     env = gym.make("PongDeterministic-v4")
     ##Book keeping
-    rewards = []
-    avgrewards = []
     VALUE_ESTIMATOR_LOSS = []
     POLICY_LOSS = []
     state = deque(maxlen = 4)
-
+    wandb.init(project="PPO_PONG", entity="neuroori") 
     ##Actors in the simulation
     updater_agent = POLICY_NET.NeuralNetwork(2).to(device)
     actor_agent = POLICY_NET.NeuralNetwork(2).to(device)
@@ -110,8 +108,8 @@ if __name__ == "__main__":
         loadModel(value_estimator, "VALUE_WEIGHTS.pth")
     
     total_time = 0
-    cumureward = 0
     batch_steps = 0
+
     for episode in range(1,EPISODES+500000000000):
         observation = env.reset()
         state.append(getFrame(observation))
@@ -119,6 +117,8 @@ if __name__ == "__main__":
         state.append(getFrame(observation))
         state.append(getFrame(observation))
         gamereward = 0
+        games_played = 0
+        batch_reward = 0
         while batch_steps < 5000:
             action = predict_POLICY(actor_agent, makeState(state)/255, transition)
             if action == 0:
@@ -127,22 +127,23 @@ if __name__ == "__main__":
                 observation, reward, done, info = env.step(3)##DOWN
             transition.addTransition(makeState(state), reward, action)
             state.append(getFrame(observation))
-            cumureward += reward
             total_time += 1
             batch_steps += 1
             gamereward += reward
             env.render()
             if done:
                 print("Running reward: ", gamereward)
-                rewards.append(gamereward)
+                batch_reward += gamereward
                 gamereward = 0
                 observation = env.reset()
                 state.append(getFrame(observation))
                 state.append(getFrame(observation))
                 state.append(getFrame(observation))
                 state.append(getFrame(observation))
+                games_played += 1
+
         if batch_steps >= 5000:
-            print("Batch running reward: ", cumureward, " Episode: ", episode, " Steps: ", total_time)
+            print("Batch running reward: ", batch_reward/games_played, " Episode: ", episode, " Steps: ", total_time)
             ##Put data to a tensor form
             G = transition.discounted_reward(GAMMA)
             G = torch.from_numpy(G).to(device).float()
@@ -152,10 +153,7 @@ if __name__ == "__main__":
             actions = [torch.from_numpy(np.array(action)) for action in transition.actions]
             actions = torch.stack(actions)
             actions = actions.float()
-            #probs = torch.stack(transition.probs)
-            #probs = probs.float()
             ##TRAIN
-            #agent_copy = copy.deepcopy(agent)
             V_ESTIMATES = torch.squeeze(predict_VALUE(value_estimator, states)).float()
             loss_policy = train_POLICYNET(states.to(device), actions.to(device),  (G-V_ESTIMATES).to(device), updater_agent, actor_agent, optimizer_POLICY)
             loss_value = train_ESTIMATORNET(states, G, loss_VALUE, value_estimator, optimizer_VALUE)
@@ -163,13 +161,12 @@ if __name__ == "__main__":
             print(loss_value)
             POLICY_LOSS.append(loss_policy)
             VALUE_ESTIMATOR_LOSS.append(loss_value)
-            avgrewards.append(cumureward/BATCH_SIZE)
+            wandb.log({"BATCH REWARD": batch_reward/games_played})
+            games_played = 0
             cumureward = 0
             batch_steps = 0
             transition.resetTransitions()
-            #old_agent = agent_copy
             actor_agent.load_state_dict(updater_agent.state_dict())
             if total_time % 100000 == 0:
                 saveModel(actor_agent, "POLICY_WEIGHTS.pth")
                 saveModel(value_estimator, "VALUE_WEIGHTS.pth")
-                #graph(avgrewards, rewards, POLICY_LOSS, VALUE_ESTIMATOR_LOSS, "fetajuusto/VPG-PONG")
