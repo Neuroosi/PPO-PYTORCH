@@ -30,5 +30,5 @@ class Transition:
             cache = cache*GAMMA + self.rewards[t]
             G[t] = cache
         ##Normalize
-        G = (G-np.mean(G))/(np.std(G))
+        G = (G-np.mean(G))/(np.std(G)+1e-8)
         return G
