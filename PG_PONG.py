@@ -28,9 +28,8 @@ def train_POLICYNET(states , actions, A, agent, old_agent, optimizer):
     pred = agent(states)
     old_pred = old_agent(states)
     actions = actions*A.unsqueeze(1)
-    #pred_ratio = torch.exp(torch.log(pred))/torch.exp(torch.log(old_pred))
-    pred_ratio = 1 + pred - old_pred
-    print(pred_ratio, " ratioo")
+    #pred_ratio = 1 + pred - old_pred
+    pred_ratio = torch.exp(torch.log(pred)- torch.log(old_pred))
     clip = torch.clamp(pred_ratio, 1-EPSILON, 1+EPSILON)
     loss = -torch.mean(torch.min(pred_ratio*actions, clip*actions))
     optimizer.zero_grad()
@@ -144,8 +143,8 @@ if __name__ == "__main__":
                 state.append(getFrame(observation))
                 games_played += 1
 
-        
-        print("Batch running reward: ", batch_reward/games_played, " Episode: ", episode, " Steps: ", total_time)
+        if games_played > 0:
+            print("Batch running reward: ", batch_reward/games_played, " Episode: ", episode, " Steps: ", total_time)
         ##Put data to a tensor form
         G = transition.discounted_reward(GAMMA)
         G = torch.from_numpy(G).to(device).float()
@@ -163,7 +162,8 @@ if __name__ == "__main__":
         print(loss_value)
         POLICY_LOSS.append(loss_policy)
         VALUE_ESTIMATOR_LOSS.append(loss_value)
-        wandb.log({"BATCH REWARD": batch_reward/games_played})
+        if games_played > 0:
+            wandb.log({"BATCH REWARD": batch_reward/games_played})
         games_played = 0
         cumureward = 0
         batch_steps = 0
