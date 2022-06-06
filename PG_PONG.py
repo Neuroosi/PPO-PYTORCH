@@ -28,7 +28,9 @@ def train_POLICYNET(states , actions, A, agent, old_agent, optimizer):
     pred = agent(states)
     old_pred = old_agent(states)
     actions = actions*A.unsqueeze(1)
-    pred_ratio = torch.exp(torch.log(pred))/torch.exp(torch.log(old_pred))
+    #pred_ratio = torch.exp(torch.log(pred))/torch.exp(torch.log(old_pred))
+    pred_ratio = 1 + pred - old_pred
+    print(pred_ratio, " ratioo")
     clip = torch.clamp(pred_ratio, 1-EPSILON, 1+EPSILON)
     loss = -torch.mean(torch.min(pred_ratio*actions, clip*actions))
     optimizer.zero_grad()
@@ -142,31 +144,31 @@ if __name__ == "__main__":
                 state.append(getFrame(observation))
                 games_played += 1
 
-        if batch_steps >= 5000:
-            print("Batch running reward: ", batch_reward/games_played, " Episode: ", episode, " Steps: ", total_time)
-            ##Put data to a tensor form
-            G = transition.discounted_reward(GAMMA)
-            G = torch.from_numpy(G).to(device).float()
-            states = [torch.from_numpy(np.array(state)/255) for state in transition.states]
-            states = torch.stack(states)
-            states = states.float()
-            actions = [torch.from_numpy(np.array(action)) for action in transition.actions]
-            actions = torch.stack(actions)
-            actions = actions.float()
-            ##TRAIN
-            V_ESTIMATES = torch.squeeze(predict_VALUE(value_estimator, states)).float()
-            loss_policy = train_POLICYNET(states.to(device), actions.to(device),  (G-V_ESTIMATES).to(device), updater_agent, actor_agent, optimizer_POLICY)
-            loss_value = train_ESTIMATORNET(states, G, loss_VALUE, value_estimator, optimizer_VALUE)
-            print(loss_policy)
-            print(loss_value)
-            POLICY_LOSS.append(loss_policy)
-            VALUE_ESTIMATOR_LOSS.append(loss_value)
-            wandb.log({"BATCH REWARD": batch_reward/games_played})
-            games_played = 0
-            cumureward = 0
-            batch_steps = 0
-            transition.resetTransitions()
-            actor_agent.load_state_dict(updater_agent.state_dict())
-            if total_time % 100000 == 0:
-                saveModel(actor_agent, "POLICY_WEIGHTS.pth")
-                saveModel(value_estimator, "VALUE_WEIGHTS.pth")
+        
+        print("Batch running reward: ", batch_reward/games_played, " Episode: ", episode, " Steps: ", total_time)
+        ##Put data to a tensor form
+        G = transition.discounted_reward(GAMMA)
+        G = torch.from_numpy(G).to(device).float()
+        states = [torch.from_numpy(np.array(state)/255) for state in transition.states]
+        states = torch.stack(states)
+        states = states.float()
+        actions = [torch.from_numpy(np.array(action)) for action in transition.actions]
+        actions = torch.stack(actions)
+        actions = actions.float()
+        ##TRAIN
+        V_ESTIMATES = torch.squeeze(predict_VALUE(value_estimator, states)).float()
+        loss_policy = train_POLICYNET(states.to(device), actions.to(device),  (G-V_ESTIMATES).to(device), updater_agent, actor_agent, optimizer_POLICY)
+        loss_value = train_ESTIMATORNET(states, G, loss_VALUE, value_estimator, optimizer_VALUE)
+        print(loss_policy)
+        print(loss_value)
+        POLICY_LOSS.append(loss_policy)
+        VALUE_ESTIMATOR_LOSS.append(loss_value)
+        wandb.log({"BATCH REWARD": batch_reward/games_played})
+        games_played = 0
+        cumureward = 0
+        batch_steps = 0
+        transition.resetTransitions()
+        actor_agent.load_state_dict(updater_agent.state_dict())
+        if total_time % 100000 == 0:
+            saveModel(actor_agent, "POLICY_WEIGHTS.pth")
+            saveModel(value_estimator, "VALUE_WEIGHTS.pth")
