@@ -16,7 +16,7 @@ from wandb import wandb
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 ##Hyperparameters
-learning_rate_policy = 0.0001
+learning_rate_policy = 0.00025
 learning_rate_value = 0.001
 GAMMA = 0.99
 EPISODES = 5000
